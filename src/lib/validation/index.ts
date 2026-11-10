@@ -110,7 +110,33 @@ export const weeklyReflectionSchema = z.object({
     .max(5000, "Reflection is too long"),
 });
 
+export const registerSchema = z.object({
+  email: z
+    .string({ required_error: "Email is required" })
+    .trim()
+    .toLowerCase()
+    .email("Invalid email address format")
+    .max(254, "Email must not exceed 254 characters"),
+  password: z
+    .string({ required_error: "Password is required" })
+    .min(8, "Password must be at least 8 characters")
+    .max(128, "Password must not exceed 128 characters"),
+});
+
+export const loginSchema = z.object({
+  email: z
+    .string({ required_error: "Email is required" })
+    .trim()
+    .toLowerCase()
+    .email("Invalid email address format"),
+  password: z
+    .string({ required_error: "Password is required" })
+    .min(1, "Password is required"),
+});
+
 export type ValidatedCheckin = z.infer<typeof checkinSchema>;
 export type ValidatedJournal = z.infer<typeof journalSchema>;
 export type ValidatedIntention = z.infer<typeof intentionSchema>;
 export type ValidatedWeeklyReflection = z.infer<typeof weeklyReflectionSchema>;
+export type ValidatedRegister = z.infer<typeof registerSchema>;
+export type ValidatedLogin = z.infer<typeof loginSchema>;

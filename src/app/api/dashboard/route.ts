@@ -8,16 +8,21 @@ import {
 } from "@/lib/db/queries";
 import { getTodayDateString, getGreeting, getWeekBoundaries } from "@/lib/utils";
 import { buildWeeklyAnalytics } from "@/lib/analytics";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth instanceof Response) return auth;
+    const user = auth;
+
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date") || getTodayDateString();
 
-    const todayRecord = await getDayRecord(date);
-    const recentCheckins = await getRecentCheckins(7);
+    const todayRecord = await getDayRecord(user.id, date);
+    const recentCheckins = await getRecentCheckins(user.id, 7);
 
     // Tomorrow's intention
     const target = new Date(`${date}T00:00:00`);
@@ -25,12 +30,12 @@ export async function GET(request: NextRequest) {
     const tomorrowDate = `${target.getFullYear()}-${String(
       target.getMonth() + 1
     ).padStart(2, "0")}-${String(target.getDate()).padStart(2, "0")}`;
-    const tomorrowIntention = await getDailyIntention(tomorrowDate);
+    const tomorrowIntention = await getDailyIntention(user.id, tomorrowDate);
 
     // Weekly metrics
     const { startDate, endDate } = getWeekBoundaries(date);
-    const weekCheckins = await getCheckinsInRange(startDate, endDate);
-    const weekJournals = await getJournalsInRange(startDate, endDate);
+    const weekCheckins = await getCheckinsInRange(user.id, startDate, endDate);
+    const weekJournals = await getJournalsInRange(user.id, startDate, endDate);
     const weekAnalytics = buildWeeklyAnalytics(
       weekCheckins,
       weekJournals,

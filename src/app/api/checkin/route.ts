@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { saveDailyCheckin, getDailyCheckin } from "@/lib/db/queries";
 import { checkinSchema } from "@/lib/validation";
+import { requireUser, validateSameOrigin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth instanceof Response) return auth;
+    const user = auth;
+
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date");
 
@@ -16,7 +21,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const checkin = await getDailyCheckin(date);
+    const checkin = await getDailyCheckin(user.id, date);
     return NextResponse.json({ success: true, data: checkin });
   } catch (error) {
     console.error("Error fetching checkin:", error);
@@ -29,6 +34,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const originError = validateSameOrigin(request);
+    if (originError) return originError;
+
+    const auth = await requireUser();
+    if (auth instanceof Response) return auth;
+    const user = auth;
+
     const body = await request.json();
     const parseResult = checkinSchema.safeParse(body);
 
@@ -42,7 +54,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const saved = await saveDailyCheckin(parseResult.data);
+    const saved = await saveDailyCheckin(user.id, parseResult.data);
     return NextResponse.json({
       success: true,
       message: "Daily check-in saved successfully.",

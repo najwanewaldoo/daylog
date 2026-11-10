@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMonthOverview } from "@/lib/db/queries";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth instanceof Response) return auth;
+    const user = auth;
+
     const { searchParams } = new URL(request.url);
     const month = searchParams.get("month"); // Format: YYYY-MM
 
@@ -15,7 +20,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const records = await getMonthOverview(month);
+    const records = await getMonthOverview(user.id, month);
     return NextResponse.json({ success: true, data: records });
   } catch (error) {
     console.error("Error fetching history overview:", error);

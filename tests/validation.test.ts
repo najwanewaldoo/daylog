@@ -4,6 +4,8 @@ import {
   journalSchema,
   intentionSchema,
   weeklyReflectionSchema,
+  registerSchema,
+  loginSchema,
   isValidISODateString,
 } from "../src/lib/validation";
 
@@ -183,6 +185,40 @@ describe("Validation Layer Tests", () => {
         reflection: "   ",
       };
       expect(weeklyReflectionSchema.safeParse(empty).success).toBe(false);
+    });
+  });
+
+  describe("Auth Schemas Validation", () => {
+    it("accepts valid registration payload", () => {
+      const valid = {
+        email: "  Student@University.EDU  ",
+        password: "securePassword123",
+      };
+      const result = registerSchema.safeParse(valid);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.email).toBe("student@university.edu");
+      }
+    });
+
+    it("rejects short or excessive passwords in registration", () => {
+      expect(
+        registerSchema.safeParse({ email: "user@test.com", password: "123" }).success
+      ).toBe(false);
+
+      expect(
+        registerSchema.safeParse({
+          email: "user@test.com",
+          password: "a".repeat(129),
+        }).success
+      ).toBe(false);
+    });
+
+    it("rejects invalid email formats in registration", () => {
+      expect(
+        registerSchema.safeParse({ email: "not-an-email", password: "validPassword123" })
+          .success
+      ).toBe(false);
     });
   });
 });

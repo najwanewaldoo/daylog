@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWeeklyReflection, saveWeeklyReflection } from "@/lib/db/queries";
 import { weeklyReflectionSchema } from "@/lib/validation";
+import { requireUser, validateSameOrigin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth instanceof Response) return auth;
+    const user = auth;
+
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get("start");
     const endDate = searchParams.get("end");
@@ -17,7 +22,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const reflectionRecord = await getWeeklyReflection(startDate, endDate);
+    const reflectionRecord = await getWeeklyReflection(user.id, startDate, endDate);
     return NextResponse.json({
       success: true,
       data: reflectionRecord ? reflectionRecord.reflection : "",
@@ -33,6 +38,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const originError = validateSameOrigin(request);
+    if (originError) return originError;
+
+    const auth = await requireUser();
+    if (auth instanceof Response) return auth;
+    const user = auth;
+
     const body = await request.json();
     const parseResult = weeklyReflectionSchema.safeParse(body);
 
@@ -47,6 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     const saved = await saveWeeklyReflection(
+      user.id,
       parseResult.data.startDate,
       parseResult.data.endDate,
       parseResult.data.reflection

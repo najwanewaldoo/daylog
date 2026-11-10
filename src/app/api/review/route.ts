@@ -7,11 +7,16 @@ import {
 import { buildWeeklyAnalytics } from "@/lib/analytics";
 import { generateWeeklyReview } from "@/lib/recommendations";
 import { getWeekBoundaries } from "@/lib/utils";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth instanceof Response) return auth;
+    const user = auth;
+
     const { searchParams } = new URL(request.url);
     let startDate = searchParams.get("start");
     let endDate = searchParams.get("end");
@@ -22,12 +27,12 @@ export async function GET(request: NextRequest) {
       endDate = defaultBounds.endDate;
     }
 
-    const checkins = await getCheckinsInRange(startDate, endDate);
-    const journals = await getJournalsInRange(startDate, endDate);
+    const checkins = await getCheckinsInRange(user.id, startDate, endDate);
+    const journals = await getJournalsInRange(user.id, startDate, endDate);
 
     const analytics = buildWeeklyAnalytics(checkins, journals, startDate, endDate);
     const reviewResult = generateWeeklyReview(analytics, checkins, journals);
-    const reflectionRecord = await getWeeklyReflection(startDate, endDate);
+    const reflectionRecord = await getWeeklyReflection(user.id, startDate, endDate);
     reviewResult.savedReflection = reflectionRecord?.reflection || null;
 
     return NextResponse.json({ success: true, data: reviewResult });

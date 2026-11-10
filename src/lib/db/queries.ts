@@ -10,7 +10,11 @@ import {
   type WeeklyReviewRecord,
 } from "./schema";
 import { eq, desc, and, gte, lte, or, like } from "drizzle-orm";
-import type { ValidatedCheckin, ValidatedJournal, ValidatedIntention } from "../validation";
+import type {
+  ValidatedCheckin,
+  ValidatedJournal,
+  ValidatedIntention,
+} from "../validation";
 import type { DayRecord } from "@/types";
 
 function first<T>(rows: T[]): T | undefined {
@@ -18,22 +22,33 @@ function first<T>(rows: T[]): T | undefined {
 }
 
 /**
- * Fetch a journal entry by ISO date (YYYY-MM-DD)
+ * Fetch a journal entry by ISO date (YYYY-MM-DD) for a specific user
  */
-export async function getJournalEntry(date: string): Promise<JournalEntry | undefined> {
+export async function getJournalEntry(
+  userId: number,
+  date: string
+): Promise<JournalEntry | undefined> {
   const db = await getDb();
   const rows = await db
     .select()
     .from(journalEntries)
-    .where(eq(journalEntries.entryDate, date))
+    .where(
+      and(
+        eq(journalEntries.userId, userId),
+        eq(journalEntries.entryDate, date)
+      )
+    )
     .limit(1);
   return first(rows);
 }
 
 /**
- * Upsert a journal entry (single atomic statement)
+ * Upsert a journal entry for a specific user (atomic statement)
  */
-export async function saveJournalEntry(data: ValidatedJournal): Promise<JournalEntry> {
+export async function saveJournalEntry(
+  userId: number,
+  data: ValidatedJournal
+): Promise<JournalEntry> {
   const db = await getDb();
   const now = new Date().toISOString();
   const fields = {
@@ -45,9 +60,15 @@ export async function saveJournalEntry(data: ValidatedJournal): Promise<JournalE
 
   const rows = await db
     .insert(journalEntries)
-    .values({ entryDate: data.entryDate, ...fields, createdAt: now, updatedAt: now })
+    .values({
+      userId,
+      entryDate: data.entryDate,
+      ...fields,
+      createdAt: now,
+      updatedAt: now,
+    })
     .onConflictDoUpdate({
-      target: journalEntries.entryDate,
+      target: [journalEntries.userId, journalEntries.entryDate],
       set: { ...fields, updatedAt: now },
     })
     .returning();
@@ -55,24 +76,35 @@ export async function saveJournalEntry(data: ValidatedJournal): Promise<JournalE
 }
 
 /**
- * Fetch checkin by date
+ * Fetch check-in by date for a specific user
  */
-export async function getDailyCheckin(date: string): Promise<DailyCheckin | undefined> {
+export async function getDailyCheckin(
+  userId: number,
+  date: string
+): Promise<DailyCheckin | undefined> {
   const db = await getDb();
   const rows = await db
     .select()
     .from(dailyCheckins)
-    .where(eq(dailyCheckins.entryDate, date))
+    .where(
+      and(
+        eq(dailyCheckins.userId, userId),
+        eq(dailyCheckins.entryDate, date)
+      )
+    )
     .limit(1);
   return first(rows);
 }
 
 /**
- * Upsert a daily check-in with referential integrity:
+ * Upsert a daily check-in with referential integrity for a specific user:
  * Automatically creates an empty journal entry if one does not exist yet.
  * Both statements run in one atomic batch (one network round trip).
  */
-export async function saveDailyCheckin(data: ValidatedCheckin): Promise<DailyCheckin> {
+export async function saveDailyCheckin(
+  userId: number,
+  data: ValidatedCheckin
+): Promise<DailyCheckin> {
   const db = await getDb();
   const now = new Date().toISOString();
   const metrics = {
@@ -88,13 +120,24 @@ export async function saveDailyCheckin(data: ValidatedCheckin): Promise<DailyChe
   const [, checkinRows] = await db.batch([
     db
       .insert(journalEntries)
-      .values({ entryDate: data.entryDate, createdAt: now, updatedAt: now })
+      .values({
+        userId,
+        entryDate: data.entryDate,
+        createdAt: now,
+        updatedAt: now,
+      })
       .onConflictDoNothing(),
     db
       .insert(dailyCheckins)
-      .values({ entryDate: data.entryDate, ...metrics, createdAt: now, updatedAt: now })
+      .values({
+        userId,
+        entryDate: data.entryDate,
+        ...metrics,
+        createdAt: now,
+        updatedAt: now,
+      })
       .onConflictDoUpdate({
-        target: dailyCheckins.entryDate,
+        target: [dailyCheckins.userId, dailyCheckins.entryDate],
         set: { ...metrics, updatedAt: now },
       })
       .returning(),
@@ -104,22 +147,33 @@ export async function saveDailyCheckin(data: ValidatedCheckin): Promise<DailyChe
 }
 
 /**
- * Fetch intention by target date
+ * Fetch intention by target date for a specific user
  */
-export async function getDailyIntention(date: string): Promise<DailyIntention | undefined> {
+export async function getDailyIntention(
+  userId: number,
+  date: string
+): Promise<DailyIntention | undefined> {
   const db = await getDb();
   const rows = await db
     .select()
     .from(dailyIntentions)
-    .where(eq(dailyIntentions.targetDate, date))
+    .where(
+      and(
+        eq(dailyIntentions.userId, userId),
+        eq(dailyIntentions.targetDate, date)
+      )
+    )
     .limit(1);
   return first(rows);
 }
 
 /**
- * Upsert daily intention
+ * Upsert daily intention for a specific user
  */
-export async function saveDailyIntention(data: ValidatedIntention): Promise<DailyIntention> {
+export async function saveDailyIntention(
+  userId: number,
+  data: ValidatedIntention
+): Promise<DailyIntention> {
   const db = await getDb();
   const now = new Date().toISOString();
   const fields = {
@@ -129,9 +183,15 @@ export async function saveDailyIntention(data: ValidatedIntention): Promise<Dail
 
   const rows = await db
     .insert(dailyIntentions)
-    .values({ targetDate: data.targetDate, ...fields, createdAt: now, updatedAt: now })
+    .values({
+      userId,
+      targetDate: data.targetDate,
+      ...fields,
+      createdAt: now,
+      updatedAt: now,
+    })
     .onConflictDoUpdate({
-      target: dailyIntentions.targetDate,
+      target: [dailyIntentions.userId, dailyIntentions.targetDate],
       set: { ...fields, updatedAt: now },
     })
     .returning();
@@ -139,13 +199,16 @@ export async function saveDailyIntention(data: ValidatedIntention): Promise<Dail
 }
 
 /**
- * Get comprehensive record for a single date
+ * Get comprehensive record for a single date for a specific user
  */
-export async function getDayRecord(date: string): Promise<DayRecord> {
+export async function getDayRecord(
+  userId: number,
+  date: string
+): Promise<DayRecord> {
   const [journal, checkin, intention] = await Promise.all([
-    getJournalEntry(date),
-    getDailyCheckin(date),
-    getDailyIntention(date),
+    getJournalEntry(userId, date),
+    getDailyCheckin(userId, date),
+    getDailyIntention(userId, date),
   ]);
 
   return {
@@ -157,9 +220,10 @@ export async function getDayRecord(date: string): Promise<DayRecord> {
 }
 
 /**
- * Get check-ins in date range (inclusive)
+ * Get check-ins in date range (inclusive) for a specific user
  */
 export async function getCheckinsInRange(
+  userId: number,
   startDate: string,
   endDate: string
 ): Promise<DailyCheckin[]> {
@@ -169,6 +233,7 @@ export async function getCheckinsInRange(
     .from(dailyCheckins)
     .where(
       and(
+        eq(dailyCheckins.userId, userId),
         gte(dailyCheckins.entryDate, startDate),
         lte(dailyCheckins.entryDate, endDate)
       )
@@ -177,9 +242,10 @@ export async function getCheckinsInRange(
 }
 
 /**
- * Get journals in date range
+ * Get journals in date range for a specific user
  */
 export async function getJournalsInRange(
+  userId: number,
   startDate: string,
   endDate: string
 ): Promise<JournalEntry[]> {
@@ -189,6 +255,7 @@ export async function getJournalsInRange(
     .from(journalEntries)
     .where(
       and(
+        eq(journalEntries.userId, userId),
         gte(journalEntries.entryDate, startDate),
         lte(journalEntries.entryDate, endDate)
       )
@@ -197,9 +264,10 @@ export async function getJournalsInRange(
 }
 
 /**
- * Get intentions in date range
+ * Get intentions in date range for a specific user
  */
 export async function getIntentionsInRange(
+  userId: number,
   startDate: string,
   endDate: string
 ): Promise<DailyIntention[]> {
@@ -209,6 +277,7 @@ export async function getIntentionsInRange(
     .from(dailyIntentions)
     .where(
       and(
+        eq(dailyIntentions.userId, userId),
         gte(dailyIntentions.targetDate, startDate),
         lte(dailyIntentions.targetDate, endDate)
       )
@@ -217,21 +286,28 @@ export async function getIntentionsInRange(
 }
 
 /**
- * Get recent check-ins (up to N items)
+ * Get recent check-ins (up to N items) for a specific user
  */
-export async function getRecentCheckins(limit: number = 7): Promise<DailyCheckin[]> {
+export async function getRecentCheckins(
+  userId: number,
+  limit: number = 7
+): Promise<DailyCheckin[]> {
   const db = await getDb();
   return db
     .select()
     .from(dailyCheckins)
+    .where(eq(dailyCheckins.userId, userId))
     .orderBy(desc(dailyCheckins.entryDate))
     .limit(limit);
 }
 
 /**
- * Search journal entries by keyword
+ * Search journal entries by keyword for a specific user
  */
-export async function searchJournals(query: string): Promise<JournalEntry[]> {
+export async function searchJournals(
+  userId: number,
+  query: string
+): Promise<JournalEntry[]> {
   if (!query || query.trim().length === 0) return [];
   const term = `%${query.trim()}%`;
   const db = await getDb();
@@ -239,29 +315,35 @@ export async function searchJournals(query: string): Promise<JournalEntry[]> {
     .select()
     .from(journalEntries)
     .where(
-      or(
-        like(journalEntries.gratitude, term),
-        like(journalEntries.wentWell, term),
-        like(journalEntries.challenge, term),
-        like(journalEntries.freeText, term)
+      and(
+        eq(journalEntries.userId, userId),
+        or(
+          like(journalEntries.gratitude, term),
+          like(journalEntries.wentWell, term),
+          like(journalEntries.challenge, term),
+          like(journalEntries.freeText, term)
+        )
       )
     )
     .orderBy(desc(journalEntries.entryDate));
 }
 
 /**
- * Get all records for a month (e.g. "2026-11")
+ * Get all records for a month (e.g. "2026-11") for a specific user
  */
-export async function getMonthOverview(yearMonth: string): Promise<DayRecord[]> {
+export async function getMonthOverview(
+  userId: number,
+  yearMonth: string
+): Promise<DayRecord[]> {
   const [y, m] = yearMonth.split("-").map(Number);
   const lastDay = new Date(y, m, 0).getDate();
   const start = `${yearMonth}-01`;
   const end = `${yearMonth}-${String(lastDay).padStart(2, "0")}`;
 
   const [journals, checkins, intentions] = await Promise.all([
-    getJournalsInRange(start, end),
-    getCheckinsInRange(start, end),
-    getIntentionsInRange(start, end),
+    getJournalsInRange(userId, start, end),
+    getCheckinsInRange(userId, start, end),
+    getIntentionsInRange(userId, start, end),
   ]);
 
   // Map by date
@@ -302,9 +384,10 @@ export async function getMonthOverview(yearMonth: string): Promise<DayRecord[]> 
 }
 
 /**
- * Get weekly reflection
+ * Get weekly reflection for a specific user
  */
 export async function getWeeklyReflection(
+  userId: number,
   startDate: string,
   endDate: string
 ): Promise<WeeklyReviewRecord | undefined> {
@@ -314,6 +397,7 @@ export async function getWeeklyReflection(
     .from(weeklyReviews)
     .where(
       and(
+        eq(weeklyReviews.userId, userId),
         eq(weeklyReviews.startDate, startDate),
         eq(weeklyReviews.endDate, endDate)
       )
@@ -323,9 +407,10 @@ export async function getWeeklyReflection(
 }
 
 /**
- * Upsert weekly reflection
+ * Upsert weekly reflection for a specific user
  */
 export async function saveWeeklyReflection(
+  userId: number,
   startDate: string,
   endDate: string,
   reflection: string
@@ -335,9 +420,20 @@ export async function saveWeeklyReflection(
 
   const rows = await db
     .insert(weeklyReviews)
-    .values({ startDate, endDate, reflection, createdAt: now, updatedAt: now })
+    .values({
+      userId,
+      startDate,
+      endDate,
+      reflection,
+      createdAt: now,
+      updatedAt: now,
+    })
     .onConflictDoUpdate({
-      target: [weeklyReviews.startDate, weeklyReviews.endDate],
+      target: [
+        weeklyReviews.userId,
+        weeklyReviews.startDate,
+        weeklyReviews.endDate,
+      ],
       set: { reflection, updatedAt: now },
     })
     .returning();
@@ -345,15 +441,31 @@ export async function saveWeeklyReflection(
 }
 
 /**
- * Export all personal data
+ * Export all personal data for a specific user
  */
-export async function exportAllData() {
+export async function exportAllData(userId: number) {
   const db = await getDb();
   const [journals, checkins, intentions, weeklyReflections] = await Promise.all([
-    db.select().from(journalEntries).orderBy(journalEntries.entryDate),
-    db.select().from(dailyCheckins).orderBy(dailyCheckins.entryDate),
-    db.select().from(dailyIntentions).orderBy(dailyIntentions.targetDate),
-    db.select().from(weeklyReviews).orderBy(weeklyReviews.startDate),
+    db
+      .select()
+      .from(journalEntries)
+      .where(eq(journalEntries.userId, userId))
+      .orderBy(journalEntries.entryDate),
+    db
+      .select()
+      .from(dailyCheckins)
+      .where(eq(dailyCheckins.userId, userId))
+      .orderBy(dailyCheckins.entryDate),
+    db
+      .select()
+      .from(dailyIntentions)
+      .where(eq(dailyIntentions.userId, userId))
+      .orderBy(dailyIntentions.targetDate),
+    db
+      .select()
+      .from(weeklyReviews)
+      .where(eq(weeklyReviews.userId, userId))
+      .orderBy(weeklyReviews.startDate),
   ]);
 
   return {
@@ -373,16 +485,17 @@ export async function exportAllData() {
 }
 
 /**
- * Delete all personal data (with explicit confirmation).
+ * Delete all personal data for a specific user (with explicit confirmation).
  * Runs as one atomic batch; check-ins are removed before journals.
+ * Keeps the user's account intact.
  */
-export async function deleteAllData(): Promise<boolean> {
+export async function deleteAllData(userId: number): Promise<boolean> {
   const db = await getDb();
   await db.batch([
-    db.delete(dailyCheckins),
-    db.delete(journalEntries),
-    db.delete(dailyIntentions),
-    db.delete(weeklyReviews),
+    db.delete(dailyCheckins).where(eq(dailyCheckins.userId, userId)),
+    db.delete(journalEntries).where(eq(journalEntries.userId, userId)),
+    db.delete(dailyIntentions).where(eq(dailyIntentions.userId, userId)),
+    db.delete(weeklyReviews).where(eq(weeklyReviews.userId, userId)),
   ]);
   return true;
 }

@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { saveDailyIntention, getDailyIntention } from "@/lib/db/queries";
 import { intentionSchema } from "@/lib/validation";
+import { requireUser, validateSameOrigin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth instanceof Response) return auth;
+    const user = auth;
+
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date");
 
@@ -16,7 +21,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const intention = await getDailyIntention(date);
+    const intention = await getDailyIntention(user.id, date);
     return NextResponse.json({ success: true, data: intention });
   } catch (error) {
     console.error("Error fetching daily intention:", error);
@@ -29,6 +34,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const originError = validateSameOrigin(request);
+    if (originError) return originError;
+
+    const auth = await requireUser();
+    if (auth instanceof Response) return auth;
+    const user = auth;
+
     const body = await request.json();
     const parseResult = intentionSchema.safeParse(body);
 
@@ -42,7 +54,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const saved = await saveDailyIntention(parseResult.data);
+    const saved = await saveDailyIntention(user.id, parseResult.data);
     return NextResponse.json({
       success: true,
       message: "Daily intention saved successfully.",

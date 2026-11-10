@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDayRecord } from "@/lib/db/queries";
 import { dateStringRegex } from "@/lib/validation";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth instanceof Response) return auth;
+    const user = auth;
+
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date");
 
@@ -16,7 +21,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const record = await getDayRecord(date);
+    const record = await getDayRecord(user.id, date);
     return NextResponse.json({ success: true, data: record });
   } catch (error) {
     console.error("Error fetching day record:", error);

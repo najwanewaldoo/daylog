@@ -122,7 +122,7 @@ export function SettingsView() {
             • <strong>Zero Third-Party AI APIs:</strong> Weekly insights and pattern recognition are computed using 100% deterministic, explainable, rule-based algorithms. Your reflections are never transmitted to LLM providers or remote servers.
           </p>
           <p>
-            • <strong>No Account Required:</strong> No cookies, no trackers, no telemetry, and no sign-up flow.
+            • <strong>Account Privacy & Data Isolation:</strong> Your reflections, ratings, and learning analytics are completely private and scoped to your account. No other user can access your data.
           </p>
         </CardContent>
       </Card>
@@ -216,10 +216,10 @@ export function SettingsView() {
         <CardHeader>
           <div className="flex items-center gap-2 text-red-700">
             <Trash2 className="w-5 h-5" />
-            <CardTitle className="text-red-900">Delete All Personal Data</CardTitle>
+            <CardTitle className="text-red-900">Delete Account Data</CardTitle>
           </div>
           <CardDescription className="text-red-700/80">
-            Permanently erase all journal entries, daily check-ins, and intentions. This action cannot be undone.
+            Permanently erase all journal entries, daily check-ins, intentions, and weekly reviews for this account. Other accounts are not affected. Your login account remains active, but all stored reflections and analytics will be permanently removed.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

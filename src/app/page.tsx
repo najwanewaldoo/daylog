@@ -9,24 +9,27 @@ import {
 } from "@/lib/db/queries";
 import { getTodayDateString, getGreeting, getWeekBoundaries } from "@/lib/utils";
 import { buildWeeklyAnalytics } from "@/lib/analytics";
+import { requireUser } from "@/lib/auth";
+import type { User } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  const user = (await requireUser()) as User;
   const today = getTodayDateString();
-  const todayRecord = await getDayRecord(today);
-  const recentCheckins = await getRecentCheckins(7);
+  const todayRecord = await getDayRecord(user.id, today);
+  const recentCheckins = await getRecentCheckins(user.id, 7);
 
   const target = new Date(`${today}T00:00:00`);
   target.setDate(target.getDate() + 1);
   const tomorrowDate = `${target.getFullYear()}-${String(
     target.getMonth() + 1
   ).padStart(2, "0")}-${String(target.getDate()).padStart(2, "0")}`;
-  const tomorrowIntention = await getDailyIntention(tomorrowDate);
+  const tomorrowIntention = await getDailyIntention(user.id, tomorrowDate);
 
   const { startDate, endDate } = getWeekBoundaries(today);
-  const weekCheckins = await getCheckinsInRange(startDate, endDate);
-  const weekJournals = await getJournalsInRange(startDate, endDate);
+  const weekCheckins = await getCheckinsInRange(user.id, startDate, endDate);
+  const weekJournals = await getJournalsInRange(user.id, startDate, endDate);
   const weekAnalytics = buildWeeklyAnalytics(
     weekCheckins,
     weekJournals,

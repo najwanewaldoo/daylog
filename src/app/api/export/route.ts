@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exportAllData } from "@/lib/db/queries";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth instanceof Response) return auth;
+    const user = auth;
+
     const { searchParams } = new URL(request.url);
     const format = searchParams.get("format") || "json";
 
-    const data = await exportAllData();
+    const data = await exportAllData(user.id);
 
     if (format === "csv") {
       // Export check-ins and journals as CSV

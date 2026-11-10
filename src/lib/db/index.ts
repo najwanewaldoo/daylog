@@ -11,24 +11,38 @@ import * as schema from "./schema";
 export type Database = LibSQLDatabase<typeof schema>;
 
 /**
- * Idempotent schema bootstrap (same constraints as before the Turso migration).
+ * Idempotent schema bootstrap with multi-user isolation.
  * Safe to run on every cold start: every statement is CREATE ... IF NOT EXISTS.
- * Keep in sync with scripts/migrate-to-turso.mjs.
  */
 const SCHEMA_STATEMENTS: string[] = [
+  `CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
   `CREATE TABLE IF NOT EXISTS journal_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    entry_date TEXT NOT NULL UNIQUE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    entry_date TEXT NOT NULL,
     gratitude TEXT,
     went_well TEXT,
     challenge TEXT,
     free_text TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, entry_date)
   )`,
   `CREATE TABLE IF NOT EXISTS daily_checkins (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    entry_date TEXT NOT NULL UNIQUE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    entry_date TEXT NOT NULL,
     sleep_hours REAL NOT NULL CHECK(sleep_hours >= 0.0 AND sleep_hours <= 24.0),
     sleep_quality INTEGER NOT NULL CHECK(sleep_quality >= 1 AND sleep_quality <= 5),
     energy INTEGER NOT NULL CHECK(energy >= 1 AND energy <= 5),
@@ -38,24 +52,28 @@ const SCHEMA_STATEMENTS: string[] = [
     study_minutes INTEGER NOT NULL CHECK(study_minutes >= 0),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (entry_date) REFERENCES journal_entries(entry_date) ON DELETE CASCADE
+    UNIQUE(user_id, entry_date),
+    FOREIGN KEY (user_id, entry_date) REFERENCES journal_entries(user_id, entry_date) ON DELETE CASCADE
   )`,
   `CREATE TABLE IF NOT EXISTS daily_intentions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    target_date TEXT NOT NULL UNIQUE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    target_date TEXT NOT NULL,
     learning_priority TEXT NOT NULL,
     recovery_action TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, target_date)
   )`,
   `CREATE TABLE IF NOT EXISTS weekly_reviews (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     start_date TEXT NOT NULL,
     end_date TEXT NOT NULL,
     reflection TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(start_date, end_date)
+    UNIQUE(user_id, start_date, end_date)
   )`,
 ];
 
@@ -114,6 +132,18 @@ async function createDbClient(url: string, authToken?: string): Promise<Client> 
 async function initDatabase(): Promise<Database> {
   const { url, authToken } = resolveConfig();
   const client = await createDbClient(url, authToken);
+
+  // Check if journal_entries table exists and whether it has user_id column
+  const tableInfo = await client.execute("PRAGMA table_info(journal_entries)");
+  if (tableInfo.rows.length > 0) {
+    const hasUserId = tableInfo.rows.some((row) => row.name === "user_id");
+    if (!hasUserId) {
+      throw new Error(
+        "Database schema is outdated: 'journal_entries' table is missing the 'user_id' column. Please run 'npm run db:reset-schema -- --yes' to recreate the tables with multi-user support."
+      );
+    }
+  }
+
   await client.batch(SCHEMA_STATEMENTS, "write");
   return drizzle(client, { schema });
 }

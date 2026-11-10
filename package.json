@@ -12,7 +12,7 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:backup": "node --env-file=.env.local scripts/backup.mjs",
-    "db:migrate-to-turso": "node --env-file=.env.local scripts/migrate-to-turso.mjs"
+    "db:reset-schema": "node --env-file=.env.local scripts/reset-schema.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.14.0",

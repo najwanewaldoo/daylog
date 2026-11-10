@@ -8,7 +8,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@libsql/client";
 
-const TABLES = ["journal_entries", "daily_checkins", "daily_intentions", "weekly_reviews"];
+const TABLES = [
+  "users",
+  "sessions",
+  "journal_entries",
+  "daily_checkins",
+  "daily_intentions",
+  "weekly_reviews",
+];
 
 const envUrl = process.env.TURSO_DATABASE_URL?.trim();
 const url = envUrl ? envUrl.replace(/^libsql:\/\//i, "https://") : "file:./data/daylog.db";
@@ -20,10 +27,15 @@ const client = createClient({
 try {
   const backup = { version: "1.0", exportDate: new Date().toISOString(), tables: {} };
   for (const table of TABLES) {
-    const rs = await client.execute(`SELECT * FROM ${table} ORDER BY id`);
-    backup.tables[table] = rs.rows.map((row) =>
-      Object.fromEntries(rs.columns.map((c) => [c, row[c]]))
-    );
+    try {
+      const rs = await client.execute(`SELECT * FROM ${table} ORDER BY id`);
+      backup.tables[table] = rs.rows.map((row) =>
+        Object.fromEntries(rs.columns.map((c) => [c, row[c]]))
+      );
+    } catch {
+      // Table may not exist yet; record as empty array
+      backup.tables[table] = [];
+    }
   }
 
   const dir = path.join(process.cwd(), "data", "backups");

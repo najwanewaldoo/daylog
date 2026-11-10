@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -12,6 +12,8 @@ import {
   Menu,
   X,
   Compass,
+  LogOut,
+  User as UserIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +28,41 @@ const NAV_ITEMS = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  const isAuthPage = pathname === "/login" || pathname === "/register";
+
+  useEffect(() => {
+    if (isAuthPage) return;
+    fetch("/api/auth/me")
+      .then((res) => {
+        if (res.ok) return res.json();
+        return null;
+      })
+      .then((data) => {
+        if (data?.user?.email) {
+          setUserEmail(data.user.email);
+        }
+      })
+      .catch(() => {});
+  }, [pathname, isAuthPage]);
+
+  async function handleLogout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      window.location.href = "/login";
+    }
+  }
+
+  // Auth pages render without sidebar, top header, drawer, or bottom nav
+  if (isAuthPage) {
+    return (
+      <div className="min-h-screen bg-canvas text-ink flex flex-col justify-center">
+        {children}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-canvas text-ink">
@@ -53,35 +90,59 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 top-[53px] bg-white z-50 p-4 border-b border-canvas-border space-y-1">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const isActive =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-canvas-subtle text-ink font-semibold"
-                    : "text-ink-muted hover:bg-canvas-subtle/60 hover:text-ink"
-                )}
-              >
-                <Icon
+        <div className="md:hidden fixed inset-0 top-[53px] bg-white z-50 p-4 border-b border-canvas-border flex flex-col justify-between">
+          <div className="space-y-1">
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive =
+                item.href === "/"
+                  ? pathname === "/"
+                  : pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
                   className={cn(
-                    "w-4 h-4",
-                    isActive ? "text-ink" : "text-ink-subtle"
+                    "flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-canvas-subtle text-ink font-semibold"
+                      : "text-ink-muted hover:bg-canvas-subtle/60 hover:text-ink"
                   )}
-                />
-                {item.label}
-              </Link>
-            );
-          })}
+                >
+                  <Icon
+                    className={cn(
+                      "w-4 h-4",
+                      isActive ? "text-ink" : "text-ink-subtle"
+                    )}
+                  />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Mobile User & Logout */}
+          <div className="pt-4 border-t border-canvas-borderLight space-y-3 pb-2">
+            {userEmail && (
+              <div className="px-2">
+                <span className="text-[10px] uppercase font-semibold text-ink-subtle">
+                  Signed in as
+                </span>
+                <p className="text-xs font-medium text-ink truncate" title={userEmail}>
+                  {userEmail}
+                </p>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Log out</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -137,15 +198,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
 
-        {/* Calm Privacy Banner */}
-        <div className="p-3 bg-canvas-cardMuted rounded-xl border border-canvas-borderLight">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-ink-muted">
-            <span className="w-2 h-2 rounded-full bg-sage-500 inline-block" />
-            <span>Local & Private</span>
+        {/* User Account & Logout & Privacy */}
+        <div className="space-y-3">
+          {/* User Email & Logout */}
+          <div className="p-3 bg-canvas-subtle rounded-xl border border-canvas-border space-y-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-6 h-6 rounded-full bg-ink/10 flex items-center justify-center shrink-0">
+                <UserIcon className="w-3.5 h-3.5 text-ink" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] text-ink-subtle uppercase tracking-wider font-semibold">
+                  Account
+                </p>
+                <p
+                  className="text-xs font-medium text-ink truncate"
+                  title={userEmail || "Signed in"}
+                >
+                  {userEmail || "Signed in"}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors cursor-pointer border border-transparent hover:border-red-200"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Log out</span>
+            </button>
           </div>
-          <p className="text-[11px] text-ink-subtle mt-1 leading-normal">
-            Your data stays in this browser and local SQLite database. No external tracking.
-          </p>
+
+          {/* Calm Privacy Banner */}
+          <div className="p-3 bg-canvas-cardMuted rounded-xl border border-canvas-borderLight">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-ink-muted">
+              <span className="w-2 h-2 rounded-full bg-sage-500 inline-block" />
+              <span>Private & Scoped</span>
+            </div>
+            <p className="text-[11px] text-ink-subtle mt-1 leading-normal">
+              Your journals and analytics are private to your account.
+            </p>
+          </div>
         </div>
       </aside>
 

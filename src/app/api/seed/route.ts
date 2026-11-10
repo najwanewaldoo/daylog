@@ -1,14 +1,22 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   saveDailyCheckin,
   saveJournalEntry,
   saveDailyIntention,
 } from "@/lib/db/queries";
+import { requireUser, validateSameOrigin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
+    const originError = validateSameOrigin(request);
+    if (originError) return originError;
+
+    const auth = await requireUser();
+    if (auth instanceof Response) return auth;
+    const user = auth;
+
     const today = new Date();
 
     const sampleDays = [
@@ -168,7 +176,7 @@ export async function POST() {
       },
     ];
 
-    // Days are independent, so write them in parallel (fewer round trips to Turso).
+    // Days are independent, so write them in parallel
     await Promise.all(
       sampleDays.map(async (item) => {
         const d = new Date(today);
@@ -179,7 +187,7 @@ export async function POST() {
         const dateStr = `${yyyy}-${mm}-${dd}`;
 
         // 1. Journal
-        await saveJournalEntry({
+        await saveJournalEntry(user.id, {
           entryDate: dateStr,
           gratitude: item.journal.gratitude,
           wentWell: item.journal.wentWell,
@@ -188,7 +196,7 @@ export async function POST() {
         });
 
         // 2. Checkin
-        await saveDailyCheckin({
+        await saveDailyCheckin(user.id, {
           entryDate: dateStr,
           sleepHours: item.checkin.sleepHours,
           sleepQuality: item.checkin.sleepQuality,
@@ -200,7 +208,7 @@ export async function POST() {
         });
 
         // 3. Intention
-        await saveDailyIntention({
+        await saveDailyIntention(user.id, {
           targetDate: dateStr,
           learningPriority: item.intention.learningPriority,
           recoveryAction: item.intention.recoveryAction,
